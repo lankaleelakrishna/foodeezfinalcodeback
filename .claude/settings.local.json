@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(dir C:\\\\Users\\\\ChaitanyaYeranagula\\\\Downloads\\\\foodeezplus\\\\restaurant-manager-kit\\\\backend\\\\dist *)",
+      "PowerShell(ls \"C:\\\\Users\\\\ChaitanyaYeranagula\\\\Downloads\\\\foodeezplus\\\\restaurant-manager-kit\\\\backend\\\\dist\" -ErrorAction SilentlyContinue; if \\(-not $?\\) { \"dist folder does not exist\" })",
+      "Bash(npx tsc *)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(Get-ChildItem -Force)",
+      "Bash(Select-Object Name, PSIsContainer)"
+    ]
+  }
+}

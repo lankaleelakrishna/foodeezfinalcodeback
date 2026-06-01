@@ -1,0 +1,1 @@
+const env=fs.readFileSync('.env','utf8').split('\\n').reduce((acc,line)= t=line.trim(); if(!t

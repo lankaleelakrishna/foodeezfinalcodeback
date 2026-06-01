@@ -43,6 +43,7 @@ model Restaurant {
   bankAccountHolderName String?      @map("bank_account_holder_name")
   accountType       String?          @map("account_type")
   panNumber         String?          @map("pan_number")
+  legalEntity       String?          @map("legal_entity")
   frontPhoto        String?          @map("front_photo")
   ifscCode          String?          @map("ifsc_code")
   leadStatus        LeadStatus       @default(INTERESTED) @map("lead_status")

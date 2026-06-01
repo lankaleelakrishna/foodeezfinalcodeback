@@ -45,4 +45,8 @@ export class RegisterStep1Dto {
   @IsOptional()
   @IsString()
   leadSource?: string;
+
+  @IsOptional()
+  @IsString()
+  legalEntity?: string;
 }

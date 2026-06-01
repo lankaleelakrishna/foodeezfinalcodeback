@@ -30,6 +30,10 @@ export class RegisterStep3Dto {
   storePhotos?: string[];
 
   @IsOptional()
+  @IsString()
+  coverPhotoKey?: string;
+
+  @IsOptional()
   temporaryClosure?: boolean;
 
   @IsOptional()

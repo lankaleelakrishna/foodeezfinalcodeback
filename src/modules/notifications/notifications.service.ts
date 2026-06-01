@@ -202,4 +202,34 @@ Thank you for ordering with Foodeez.
       this.logger.error(`Failed sending order status email to ${payload.customerEmail}: ${err?.message || err}`);
     }
   }
+
+  async sendRegistrationSubmitted(payload: { email: string; restaurantId: string; restaurantName: string; submittedBy?: string }) {
+    if (!process.env.SMTP_FROM) return;
+
+    const subject = `Registration Submitted for Review: ${payload.restaurantName}`;
+
+    const body = `
+Hello,
+
+The registration for "${payload.restaurantName}" (ID: ${payload.restaurantId}) has been submitted for review.
+
+Submitted By: ${payload.submittedBy ?? 'Sales Operator'}
+
+You will be notified when the review is completed.
+
+Thank you.
+`;
+
+    try {
+      await this.transporter.sendMail({
+        from: process.env.SMTP_FROM,
+        to: payload.email,
+        subject,
+        text: body,
+      });
+      this.logger.log(`Registration submission email sent to ${payload.email} for restaurant ${payload.restaurantId}`);
+    } catch (err: any) {
+      this.logger.error(`Failed sending registration submission email to ${payload.email}: ${err?.message || err}`);
+    }
+  }
 }

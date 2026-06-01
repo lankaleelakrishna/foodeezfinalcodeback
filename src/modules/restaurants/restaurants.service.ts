@@ -412,6 +412,7 @@ export class RestaurantsService {
       zipCode: payload.zipCode,
       latitude: payload.latitude,
       longitude: payload.longitude,
+      legalEntity: payload.legalEntity,
       leadStatus: suspicious ? LeadStatus.Review : LeadStatus.Registered,
       leadSource: payload.leadSource,
       riskScore: this.calculateRiskScore(payload as any, suspicious),
@@ -648,6 +649,9 @@ export class RestaurantsService {
     restaurant.storePhotos = payload.storePhotos;
     restaurant.temporaryClosure = payload.temporaryClosure ?? false;
     restaurant.holidayMode = payload.holidayMode ?? false;
+    if (payload.coverPhotoKey) {
+      restaurant.coverPhoto = payload.coverPhotoKey;
+    }
     restaurant.extractedMenu = extractedMenu;
     restaurant.onboardingStep = 3;
     restaurant.status = 'active'; // Mark as active after step 3
@@ -715,7 +719,7 @@ export class RestaurantsService {
    * Get all documents for a restaurant - accessible to restaurant admin and super admin
    */
   async getRestaurantDocuments(restaurantId: string) {
-    const restaurant = await this.findOne(restaurantId);
+    await this.findOne(restaurantId);
 
     const documents = await this.documentRepository.find({
       where: { restaurantId },
@@ -872,6 +876,45 @@ export class RestaurantsService {
       ifscCode: restaurant.ifscCode,
       temporaryClosure: restaurant.temporaryClosure,
       holidayMode: restaurant.holidayMode,
+    };
+  }
+
+  /**
+   * Called when a sales operator or restaurant admin submits the registration for review.
+   * Sets restaurant status to 'review' and notifies the submitting user via email.
+   */
+  async submitForReview(restaurantId: string, user: any) {
+    const restaurant = await this.findOne(restaurantId);
+
+    // If restaurant admin is submitting, ensure they own the restaurant
+    if (user?.role === UserRole.RestaurantAdmin) {
+      const rid = user?.restaurant?.id;
+      if (!rid || rid !== restaurantId) throw new BadRequestException('Access denied');
+    }
+
+    restaurant.status = 'review';
+    restaurant.onboardingStep = Math.max(restaurant.onboardingStep, 4);
+
+    const updated = await this.restaurantRepository.save(restaurant);
+
+    // Notify the submitting user (sales operator or admin) by email
+    const toEmail = user?.email;
+    if (toEmail) {
+      await this.notificationsService.sendRegistrationSubmitted({
+        email: toEmail,
+        restaurantId: updated.id,
+        restaurantName: updated.name ?? '',
+        submittedBy: user?.displayName ?? user?.email,
+      });
+    }
+
+    this.logger.log(`Restaurant ${restaurantId} submitted for review by ${user?.email}`);
+
+    return {
+      id: updated.id,
+      status: updated.status,
+      onboardingStep: updated.onboardingStep,
+      message: 'Submitted for review successfully.',
     };
   }
 

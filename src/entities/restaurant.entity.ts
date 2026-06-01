@@ -89,8 +89,14 @@ export class RestaurantEntity {
   @Column({ name: 'pan_number', nullable: true })
   panNumber?: string;
 
+  @Column({ name: 'legal_entity', nullable: true })
+  legalEntity?: string;
+
   @Column({ name: 'front_photo', nullable: true })
   frontPhoto?: string;
+
+  @Column({ name: 'cover_photo', nullable: true })
+  coverPhoto?: string;
 
   @Column({ name: 'ifsc_code', nullable: true })
   ifscCode?: string;

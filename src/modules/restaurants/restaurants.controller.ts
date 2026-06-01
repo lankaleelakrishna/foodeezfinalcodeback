@@ -1,4 +1,8 @@
-import { Body, Controller, Get, Param, Post, Patch, UseGuards, ForbiddenException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Patch, UseGuards, ForbiddenException, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { mkdirSync, existsSync } from 'fs';
 import { RestaurantsService } from './restaurants.service';
 import { CreateRestaurantDto } from './dto/create-restaurant.dto';
 import { CreateRestaurantUserDto } from './dto/create-restaurant-user.dto';
@@ -126,6 +130,43 @@ export class RestaurantsController {
     return this.restaurantsService.registerStep2(restaurantId, payload);
   }
 
+  @Post(':id/register/step3/cover-photo')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.RestaurantAdmin, UserRole.SuperAdmin)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (req, _file, cb) => {
+          const uploadPath = `./uploads/registration/${req.params.id}`;
+          if (!existsSync(uploadPath)) mkdirSync(uploadPath, { recursive: true });
+          cb(null, uploadPath);
+        },
+        filename: (_req, file, cb) => {
+          cb(null, `cover-photo-${Date.now()}${extname(file.originalname)}`);
+        },
+      }),
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+          return cb(new BadRequestException('Only JPEG, PNG, or WebP images are allowed'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  uploadCoverPhoto(
+    @Param('id') restaurantId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: any,
+  ) {
+    if (user?.role === UserRole.RestaurantAdmin) {
+      const rid = user?.restaurant?.id;
+      if (!rid || rid !== restaurantId) throw new ForbiddenException('Access denied');
+    }
+    if (!file) throw new BadRequestException('File is required');
+    return { key: file.path.replace(/\\/g, '/') };
+  }
+
   @Post(':id/register/step3/extract')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.RestaurantAdmin, UserRole.SuperAdmin)
@@ -223,5 +264,12 @@ export class RestaurantsController {
     @Body() payload?: { approvalNotes?: string },
   ) {
     return this.restaurantsService.approveFinalizeMenu(restaurantId, payload);
+  }
+
+  @Post(':id/submit-for-review')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SalesOperator, UserRole.RestaurantAdmin, UserRole.SuperAdmin)
+  submitForReview(@Param('id') restaurantId: string, @CurrentUser() user: any) {
+    return this.restaurantsService.submitForReview(restaurantId, user);
   }
 }

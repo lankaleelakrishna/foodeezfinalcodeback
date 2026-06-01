@@ -55,6 +55,26 @@ async function migrateRestaurantExtractedMenuColumn(app: INestApplication) {
   }
 }
 
+async function migrateRestaurantCoverPhotoColumn(app: INestApplication) {
+  const dataSource = app.get(DataSource);
+  try {
+    const [columnInfo] = await dataSource.query(
+      `SELECT data_type
+       FROM information_schema.columns
+       WHERE table_name = 'Restaurant' AND column_name = 'cover_photo' AND table_schema = 'public'`
+    );
+    if (columnInfo) {
+      console.log('✅ Restaurant.cover_photo column already exists');
+      return;
+    }
+    await dataSource.query('ALTER TABLE "Restaurant" ADD COLUMN "cover_photo" text');
+    console.log('✅ Restaurant.cover_photo column created successfully');
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
+    console.warn('⚠️ Restaurant.cover_photo migration failed:', errorMessage);
+  }
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
@@ -88,6 +108,7 @@ async function bootstrap() {
 
   await migrateDocumentTypeColumn(app);
   await migrateRestaurantExtractedMenuColumn(app);
+  await migrateRestaurantCoverPhotoColumn(app);
 
   const port = process.env.PORT ? Number(process.env.PORT) : 3001;
   await app.listen(port);

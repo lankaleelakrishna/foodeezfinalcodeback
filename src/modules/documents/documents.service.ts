@@ -237,4 +237,20 @@ export class DocumentsService {
 
     return saved;
   }
+
+  /** Mark document as pending again (admin) */
+  async setDocumentPending(restaurantId: string, documentId: string) {
+    const document = await this.documentRepository.findOne({
+      where: { id: documentId, restaurantId },
+      relations: ['restaurant'],
+    });
+    if (!document) {
+      throw new NotFoundException(`Document ${documentId} not found for restaurant ${restaurantId}`);
+    }
+
+    document.status = 'pending';
+    const saved = await this.documentRepository.save(document);
+
+    return saved;
+  }
 }

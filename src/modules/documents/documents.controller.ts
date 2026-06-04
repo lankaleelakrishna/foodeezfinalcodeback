@@ -23,26 +23,30 @@ export class DocumentsController {
   async updateDocumentStatus(
     @Param('restaurantId') restaurantId: string,
     @Param('documentId') documentId: string,
-    @Body('status') status: string,
-    @Body('reason') reason?: string,
+    @Body('status') status: unknown,
+    @Body('reason') reason?: unknown,
   ) {
-    if (!status) {
-      throw new BadRequestException('Document status is required');
+    if (typeof status !== 'string' || !status.trim()) {
+      throw new BadRequestException('Document status is required and must be a string');
     }
 
-    const normalizedStatus = status.toLowerCase();
+    const normalizedStatus = status.trim().toLowerCase();
     if (normalizedStatus === 'verified') {
       return this.documentsService.verifyDocument(restaurantId, documentId);
     }
 
+    if (normalizedStatus === 'pending') {
+      return this.documentsService.setDocumentPending(restaurantId, documentId);
+    }
+
     if (normalizedStatus === 'rejected') {
-      if (!reason || !reason.trim()) {
+      if (typeof reason !== 'string' || !reason.trim()) {
         throw new BadRequestException('A rejection reason is required when rejecting a document.');
       }
       return this.documentsService.rejectDocument(restaurantId, documentId, reason.trim());
     }
 
-    throw new BadRequestException('Unsupported document status. Use verified or rejected.');
+    throw new BadRequestException('Unsupported document status. Use verified, pending, or rejected.');
   }
 }
 

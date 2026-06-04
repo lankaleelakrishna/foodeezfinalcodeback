@@ -1,4 +1,5 @@
-import { IsArray, IsEmail, IsLatitude, IsLongitude, IsOptional, IsPhoneNumber, IsString, IsIn } from 'class-validator';
+import { IsArray, IsEmail, IsEnum, IsLatitude, IsLongitude, IsOptional, IsPhoneNumber, IsString, IsIn } from 'class-validator';
+import { LeadStatus } from '../../../entities/restaurant.entity';
 
 export class UpdateRestaurantDto {
   @IsOptional()
@@ -122,6 +123,6 @@ export class UpdateRestaurantDto {
   fssaiExpiryDate?: Date;
 
   @IsOptional()
-  @IsString()
-  leadStatus?: string;
+  @IsEnum(LeadStatus)
+  leadStatus?: LeadStatus;
 }

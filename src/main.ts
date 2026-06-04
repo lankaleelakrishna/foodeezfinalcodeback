@@ -81,6 +81,21 @@ async function bootstrap() {
   const express = require('express');
   const expressApp = app.getHttpAdapter().getInstance();
   expressApp.use(express.json({ limit: '20mb' }));
+
+  // Allow CORS for Express-managed static files and redirects as well as Nest routes
+  expressApp.use((req: any, res: any, next: any) => {
+    const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:3000';
+    res.header('Access-Control-Allow-Origin', allowedOrigin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,Origin,X-Requested-With');
+
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+    next();
+  });
+
   expressApp.get('/favicon.ico', (_req: any, res: any) => res.sendStatus(204));
   expressApp.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
 

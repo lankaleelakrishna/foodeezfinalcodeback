@@ -36,7 +36,10 @@ export class DocumentsController {
     }
 
     if (normalizedStatus === 'rejected') {
-      return this.documentsService.rejectDocument(restaurantId, documentId, reason);
+      if (!reason || !reason.trim()) {
+        throw new BadRequestException('A rejection reason is required when rejecting a document.');
+      }
+      return this.documentsService.rejectDocument(restaurantId, documentId, reason.trim());
     }
 
     throw new BadRequestException('Unsupported document status. Use verified or rejected.');

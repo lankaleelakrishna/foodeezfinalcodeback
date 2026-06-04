@@ -1,11 +1,12 @@
-import { Injectable, NotFoundException, InternalServerErrorException, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Response } from 'express';
 import { existsSync } from 'fs';
-import { join, resolve } from 'path';
+import { resolve } from 'path';
 import { Repository } from 'typeorm';
 import { DocumentEntity, DocumentType } from '../../entities/document.entity';
 import { RestaurantEntity } from '../../entities/restaurant.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class DocumentsService {
@@ -16,6 +17,7 @@ export class DocumentsService {
     private readonly documentRepository: Repository<DocumentEntity>,
     @InjectRepository(RestaurantEntity)
     private readonly restaurantRepository: Repository<RestaurantEntity>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async findByRestaurant(restaurantId: string) {
@@ -118,23 +120,38 @@ export class DocumentsService {
       return res.redirect(s3Url);
     }
 
-    const normalizedKey = document.s3Key.replace(/\\/g, '/').trim();
+    // Normalize: convert backslashes, strip leading ./ or /
+    const normalizedKey = document.s3Key.replace(/\\/g, '/').trim().replace(/^\.?\//, '');
+
+    // If the key starts with 'uploads/', redirect to the static endpoint directly.
+    // This avoids path-resolution issues and is simpler than res.sendFile.
+    if (normalizedKey.startsWith('uploads/')) {
+      const staticUrl = '/' + normalizedKey;
+      const absolutePath = resolve(process.cwd(), normalizedKey);
+      if (existsSync(absolutePath)) {
+        return res.redirect(staticUrl);
+      }
+      this.logger.warn(`Document file missing on disk: ${absolutePath} (id=${idOrRestaurantId})`);
+      throw new NotFoundException('Document file not found on this server');
+    }
+
+    // Fallback: try to find the file from the project root
+    const projectRoot = process.cwd();
     const candidatePaths = [
-      resolve(normalizedKey),
-      resolve('uploads', normalizedKey),
-      resolve('public', normalizedKey),
-      resolve(__dirname, '..', '..', normalizedKey),
-      resolve(__dirname, '..', '..', 'uploads', normalizedKey),
-      resolve(__dirname, '..', '..', 'public', normalizedKey),
+      resolve(projectRoot, normalizedKey),
+      resolve(projectRoot, 'uploads', normalizedKey),
+      resolve(__dirname, '..', '..', '..', normalizedKey),
+      resolve(__dirname, '..', '..', '..', 'uploads', normalizedKey),
     ];
 
-    const existingPath = candidatePaths.find((path) => existsSync(path));
+    const existingPath = candidatePaths.find((p) => existsSync(p));
     if (existingPath) {
       res.setHeader('Content-Disposition', `inline; filename="${document.filename}"`);
       return res.sendFile(existingPath);
     }
 
-    throw new NotFoundException('Document file not found');
+    this.logger.warn(`Document file missing on disk for id=${idOrRestaurantId}, s3Key=${document.s3Key}`);
+    throw new NotFoundException('Document file not found on this server');
   }
 
   /**
@@ -177,26 +194,47 @@ export class DocumentsService {
     return saved;
   }
 
-  /** Mark document as verified (admin) */
+  /** Mark document as verified (admin) — sends acceptance email to restaurant */
   async verifyDocument(restaurantId: string, documentId: string) {
-    const document = await this.documentRepository.findOne({ where: { id: documentId, restaurantId } });
+    const document = await this.documentRepository.findOne({
+      where: { id: documentId, restaurantId },
+      relations: ['restaurant'],
+    });
     if (!document) {
       throw new NotFoundException(`Document ${documentId} not found for restaurant ${restaurantId}`);
     }
     document.status = 'verified';
-    return this.documentRepository.save(document);
+    const saved = await this.documentRepository.save(document);
+
+    await this.notificationsService.sendDocumentVerified({
+      email: document.restaurant.email,
+      restaurantName: document.restaurant.name,
+      documentType: document.type,
+    });
+
+    return saved;
   }
 
-  /** Mark document as rejected (admin) */
-  async rejectDocument(restaurantId: string, documentId: string, reason?: string) {
-    const document = await this.documentRepository.findOne({ where: { id: documentId, restaurantId } });
+  /** Mark document as rejected (admin) — sends rejection email with reason to restaurant */
+  async rejectDocument(restaurantId: string, documentId: string, reason: string) {
+    const document = await this.documentRepository.findOne({
+      where: { id: documentId, restaurantId },
+      relations: ['restaurant'],
+    });
     if (!document) {
       throw new NotFoundException(`Document ${documentId} not found for restaurant ${restaurantId}`);
     }
     document.status = 'rejected';
-    if (reason) {
-      document.metadata = reason;
-    }
-    return this.documentRepository.save(document);
+    document.metadata = reason;
+    const saved = await this.documentRepository.save(document);
+
+    await this.notificationsService.sendDocumentRejected({
+      email: document.restaurant.email,
+      restaurantName: document.restaurant.name,
+      documentType: document.type,
+      reason,
+    });
+
+    return saved;
   }
 }

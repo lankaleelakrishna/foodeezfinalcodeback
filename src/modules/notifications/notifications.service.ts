@@ -203,6 +203,71 @@ Thank you for ordering with Foodeez.
     }
   }
 
+  async sendDocumentVerified(payload: { email: string; restaurantName: string; documentType: string }) {
+    if (!process.env.SMTP_FROM) return;
+
+    const subject = `Document Verified – ${payload.documentType}`;
+
+    const body = `
+Hello,
+
+Great news! Your ${payload.documentType} document submitted for "${payload.restaurantName}" has been verified and accepted by our team.
+
+Your restaurant profile is one step closer to going live on Foodeez.
+
+If you have any questions, feel free to contact our support team.
+
+Thank you,
+Team Foodeez
+`;
+
+    try {
+      await this.transporter.sendMail({
+        from: process.env.SMTP_FROM,
+        to: payload.email,
+        subject,
+        text: body,
+      });
+      this.logger.log(`Document verified email sent to ${payload.email} — type=${payload.documentType}`);
+    } catch (err: any) {
+      this.logger.error(`Failed sending document verified email to ${payload.email}: ${err?.message || err}`);
+    }
+  }
+
+  async sendDocumentRejected(payload: { email: string; restaurantName: string; documentType: string; reason: string }) {
+    if (!process.env.SMTP_FROM) return;
+
+    const subject = `Document Rejected – ${payload.documentType}`;
+
+    const body = `
+Hello,
+
+We regret to inform you that your ${payload.documentType} document submitted for "${payload.restaurantName}" has been rejected by our review team.
+
+Reason for rejection:
+${payload.reason}
+
+Please re-upload the correct document at your earliest convenience so we can continue the onboarding process.
+
+If you have any questions or need assistance, please contact our support team.
+
+Thank you,
+Team Foodeez
+`;
+
+    try {
+      await this.transporter.sendMail({
+        from: process.env.SMTP_FROM,
+        to: payload.email,
+        subject,
+        text: body,
+      });
+      this.logger.log(`Document rejected email sent to ${payload.email} — type=${payload.documentType}`);
+    } catch (err: any) {
+      this.logger.error(`Failed sending document rejected email to ${payload.email}: ${err?.message || err}`);
+    }
+  }
+
   async sendRegistrationSubmitted(payload: { email: string; restaurantId: string; restaurantName: string; submittedBy?: string }) {
     if (!process.env.SMTP_FROM) return;
 

@@ -125,30 +125,30 @@ model MenuCategory {
 }
 
 model MenuItem {
-  id               String              @id @default(uuid())
+  id               String                      @id @default(uuid())
   branchId         String
   categoryId       String
   sku              String?
   name             String
   description      String?
-  price            Decimal             @db.Decimal(10, 2)
-  currency         String              @default("INR")
-  stockOnHand      Int                 @default(0) @map("stock_on_hand")
-  stockThreshold   Int                 @default(0) @map("stock_threshold")
-  autoOutOfStock   Boolean             @default(true) @map("auto_out_of_stock")
-  minOrderQuantity Int                 @default(1) @map("min_order_quantity")
-  maxOrderQuantity Int                 @default(0) @map("max_order_quantity")
-  sortOrder        Int                 @default(0) @map("sort_order")
-  isVisible        Boolean             @default(true) @map("is_visible")
-  isInStock        Boolean             @default(true) @map("is_in_stock")
-  createdAt        DateTime            @default(now()) @map("created_at")
-  updatedAt        DateTime            @updatedAt @map("updated_at")
+  price            Decimal                     @db.Decimal(10, 2)
+  currency         String                      @default("INR")
+  stockOnHand      Int                         @default(0) @map("stock_on_hand")
+  stockThreshold   Int                         @default(0) @map("stock_threshold")
+  autoOutOfStock   Boolean                     @default(true) @map("auto_out_of_stock")
+  minOrderQuantity Int                         @default(1) @map("min_order_quantity")
+  maxOrderQuantity Int                         @default(0) @map("max_order_quantity")
+  sortOrder        Int                         @default(0) @map("sort_order")
+  isVisible        Boolean                     @default(true) @map("is_visible")
+  isInStock        Boolean                     @default(true) @map("is_in_stock")
+  createdAt        DateTime                    @default(now()) @map("created_at")
+  updatedAt        DateTime                    @updatedAt @map("updated_at")
   cartItems        CustomerCartItem[]
   orderItems       CustomerOrderItem[]
   reviews          CustomerReview[]
   addons           MenuAddon[]
-  branch           Branch              @relation(fields: [branchId], references: [id])
-  category         MenuCategory        @relation(fields: [categoryId], references: [id])
+  branch           Branch                      @relation(fields: [branchId], references: [id])
+  category         MenuCategory                @relation(fields: [categoryId], references: [id])
   pricingRules     MenuPricingRule[]
 }
 

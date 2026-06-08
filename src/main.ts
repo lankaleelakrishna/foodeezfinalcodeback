@@ -75,6 +75,65 @@ async function migrateRestaurantCoverPhotoColumn(app: INestApplication) {
   }
 }
 
+async function migrateMenuItemImageUrlColumn(app: INestApplication) {
+  const dataSource = app.get(DataSource);
+  try {
+    const [columnInfo] = await dataSource.query(
+      `SELECT data_type
+       FROM information_schema.columns
+       WHERE table_name = 'MenuItem' AND column_name = 'image_url' AND table_schema = 'public'`
+    );
+    if (columnInfo) {
+      console.log('✅ MenuItem.image_url column already exists');
+      return;
+    }
+    console.log('ℹ️ Adding MenuItem.image_url column');
+    await dataSource.query('ALTER TABLE "MenuItem" ADD COLUMN "image_url" text');
+    console.log('✅ MenuItem.image_url column created successfully');
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
+    console.warn('⚠️ MenuItem.image_url migration failed:', errorMessage);
+  }
+}
+
+async function migrateMenuItemChangeRequestsTable(app: INestApplication) {
+  const dataSource = app.get(DataSource);
+  try {
+    const [tableInfo] = await dataSource.query(
+      `SELECT table_name
+       FROM information_schema.tables
+       WHERE table_name = 'menu_item_change_requests' AND table_schema = 'public'`
+    );
+    if (tableInfo) {
+      console.log('✅ Table menu_item_change_requests already exists');
+      return;
+    }
+
+    console.log('ℹ️ Creating menu_item_change_requests table');
+    await dataSource.query(`
+      CREATE TABLE IF NOT EXISTS "menu_item_change_requests" (
+        id text PRIMARY KEY,
+        item_id text NOT NULL,
+        branch_id text NOT NULL,
+        restaurant_id text NOT NULL,
+        requested_by text,
+        status text NOT NULL DEFAULT 'pending',
+        change_description text NOT NULL,
+        payload jsonb NOT NULL,
+        review_comment text,
+        reviewed_by text,
+        reviewed_at timestamptz,
+        created_at timestamptz NOT NULL,
+        updated_at timestamptz NOT NULL
+      )
+    `);
+    console.log('✅ Table menu_item_change_requests created successfully');
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
+    console.warn('⚠️ menu_item_change_requests table migration failed:', errorMessage);
+  }
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
@@ -98,6 +157,7 @@ async function bootstrap() {
 
   expressApp.get('/favicon.ico', (_req: any, res: any) => res.sendStatus(204));
   expressApp.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
+  expressApp.use('/api/v1/uploads', express.static(join(__dirname, '..', 'uploads')));
 
   // Legacy and alias preview routes redirected to the new public preview endpoint
   expressApp.get('/api/v1/restaurants/:restaurantId/documents/:documentId/preview', (req: any, res: any) => {
@@ -124,6 +184,8 @@ async function bootstrap() {
   await migrateDocumentTypeColumn(app);
   await migrateRestaurantExtractedMenuColumn(app);
   await migrateRestaurantCoverPhotoColumn(app);
+  await migrateMenuItemImageUrlColumn(app);
+  await migrateMenuItemChangeRequestsTable(app);
 
   const port = process.env.PORT ? Number(process.env.PORT) : 3001;
   await app.listen(port);

@@ -108,6 +108,14 @@ export class AdminOrdersController {
   getOrder(@Param('orderId') orderId: string) {
     return this.service.getOrderDetail(orderId);
   }
+
+  @Patch(':orderId/status')
+  updateOrderStatus(
+    @Param('orderId') orderId: string,
+    @Body('status') status: CustomerOrderStatus,
+  ) {
+    return this.service.updateOrderStatus(orderId, status);
+  }
 }
 
 // ─── /restaurant/orders ───────────────────────────────────────────────────────
@@ -123,18 +131,22 @@ export class RestaurantOrdersController {
     @CurrentUser() user: any,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
-    @Query('status') status?: CustomerOrderStatus,
+    @Query('status') status?: string,
     @Query('branchId') branchId?: string,
     @Query('search') search?: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ) {
     const restaurantId = user?.restaurant?.id;
+    // Parse comma-separated status values
+    const statusArray = status
+      ? status.split(',').map((s) => s.trim() as CustomerOrderStatus)
+      : undefined;
     return this.service.listRestaurantBranchOrders({
       restaurantId,
       page,
       limit,
-      status,
+      statuses: statusArray,
       branchId,
       search,
       dateFrom,

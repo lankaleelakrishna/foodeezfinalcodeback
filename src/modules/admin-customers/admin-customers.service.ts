@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 import { CustomerEntity, CustomerStatus, CustomerTier } from '../../entities/customer.entity';
@@ -14,6 +14,7 @@ import {
 import { CustomerWalletEntity } from '../../entities/customer-wallet.entity';
 import { UpdateCustomerStatusDto } from './dto/update-customer-status.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
+import { DeliveryTrackingGateway } from '../delivery-tracking/delivery-tracking.gateway';
 
 @Injectable()
 export class AdminCustomersService {
@@ -30,6 +31,7 @@ export class AdminCustomersService {
     private readonly ticketRepo: Repository<CustomerSupportTicketEntity>,
     @InjectRepository(CustomerWalletEntity)
     private readonly walletRepo: Repository<CustomerWalletEntity>,
+    @Optional() private readonly trackingGateway?: DeliveryTrackingGateway,
   ) {}
 
   // ─── Customers ───────────────────────────────────────────────────────────────
@@ -265,6 +267,25 @@ export class AdminCustomersService {
     return order;
   }
 
+  async updateOrderStatus(orderId: string, status: CustomerOrderStatus) {
+    const order = await this.orderRepo.findOne({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const terminal = [CustomerOrderStatus.DELIVERED, CustomerOrderStatus.CANCELLED];
+    if (terminal.includes(order.status as CustomerOrderStatus)) {
+      throw new BadRequestException(`Order is already ${order.status} and cannot be updated`);
+    }
+
+    await this.orderRepo.update(orderId, { status });
+
+    const entry = this.historyRepo.create({ orderId, status });
+    await this.historyRepo.save(entry);
+
+    this.trackingGateway?.emitOrderStatusUpdate(orderId, status);
+
+    return { id: orderId, status };
+  }
+
   async getRestaurantOrderDetail(orderId: string, restaurantId: string) {
     const order = await this.orderRepo.findOne({
       where: { id: orderId, restaurantId },
@@ -280,7 +301,7 @@ export class AdminCustomersService {
     restaurantId: string;
     page: number;
     limit: number;
-    status?: CustomerOrderStatus;
+    statuses?: CustomerOrderStatus[];
     branchId?: string;
     search?: string;
     dateFrom?: string;
@@ -298,7 +319,7 @@ export class AdminCustomersService {
       .where('o.restaurantId = :restaurantId', { restaurantId: opts.restaurantId })
       .orderBy('o.createdAt', 'DESC');
 
-    if (opts.status) qb.andWhere('o.status = :status', { status: opts.status });
+    if (opts.statuses && opts.statuses.length > 0) qb.andWhere('o.status IN (:...statuses)', { statuses: opts.statuses });
     if (opts.branchId) qb.andWhere('o.branchId = :branchId', { branchId: opts.branchId });
     if (opts.search) {
       qb.andWhere('o.orderNumber ILIKE :search', { search: `%${opts.search}%` });

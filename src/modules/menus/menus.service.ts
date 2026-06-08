@@ -107,6 +107,20 @@ export class MenusService {
     return this.itemRepository.save(item);
   }
 
+  async uploadItemImage(itemId: string, file: Express.Multer.File) {
+    const item = await this.itemRepository.findOne({ where: { id: itemId } });
+    if (!item) {
+      throw new NotFoundException('Menu item not found');
+    }
+
+    const normalizedPath = file.path.replace(/\\/g, '/');
+    const uploadsIndex = normalizedPath.indexOf('/uploads/');
+    const imageUrl = uploadsIndex >= 0 ? normalizedPath.slice(uploadsIndex) : '/' + normalizedPath.replace(/^\.\//, '');
+
+    item.imageUrl = imageUrl;
+    return this.itemRepository.save(item);
+  }
+
   async submitChangeRequest(user: any, itemId: string, payload: CreateMenuItemChangeRequestDto) {
     const item = await this.itemRepository.findOne({
       where: { id: itemId },

@@ -776,6 +776,7 @@ model CustSupportTicket {
 }
 
 enum UserRole {
+  admin
   sales_operator
   restaurant_owner
   restaurant_manager

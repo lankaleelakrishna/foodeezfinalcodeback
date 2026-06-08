@@ -277,7 +277,7 @@ export class CustomerAuthService {
       this.configService.get<string>('JWT_SECRET', 'change-me'),
     );
 
-    const accessToken = this.jwtService.sign(payload, { secret, expiresIn: '15m' });
+    const accessToken = this.jwtService.sign(payload, { secret, expiresIn: '24h' });
     const refreshToken = randomUUID();
     const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);

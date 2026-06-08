@@ -68,6 +68,9 @@ export class MenuItemEntity {
   @Column({ name: 'is_in_stock', default: true })
   isInStock: boolean;
 
+  @Column({ name: 'image_url', nullable: true })
+  imageUrl?: string;
+
   @OneToMany(() => MenuAddonEntity, (addon) => addon.item)
   addons: MenuAddonEntity[];
 

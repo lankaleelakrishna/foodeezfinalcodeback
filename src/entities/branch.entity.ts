@@ -65,7 +65,7 @@ export class BranchEntity {
   @Column({ name: 'closure_reason', nullable: true })
   closureReason?: string;
 
-  @Column({ name: 'is_online', default: false })
+  @Column({ name: 'is_online', default: true })
   isOnline: boolean;
 
   @Column({ name: 'created_at', type: 'timestamptz' })

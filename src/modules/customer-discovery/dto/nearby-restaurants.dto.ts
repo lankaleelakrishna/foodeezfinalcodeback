@@ -24,7 +24,7 @@ export class NearbyRestaurantsDto {
   @IsOptional()
   @IsNumber()
   @Min(1)
-  @Max(50)
+  @Max(1000000)
   @Type(() => Number)
   radius?: number;
 
@@ -37,7 +37,7 @@ export class NearbyRestaurantsDto {
   @IsOptional()
   @IsNumber()
   @Min(1)
-  @Max(50)
+  @Max(500)
   @Type(() => Number)
   limit?: number;
 

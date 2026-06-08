@@ -1,4 +1,8 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, UseGuards, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { mkdirSync, existsSync } from 'fs';
 import { MenusService } from './menus.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
@@ -43,9 +47,72 @@ export class MenusController {
   }
 
   @Patch('menu-items/:itemId')
-  @Roles(UserRole.SuperAdmin)
-  updateItem(@Param('itemId') itemId: string, @Body() payload: UpdateMenuItemDto) {
+  @Roles(UserRole.RestaurantAdmin, UserRole.SalesOperator, UserRole.SuperAdmin)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          const uploadPath = './uploads/menu-items';
+          if (!existsSync(uploadPath)) mkdirSync(uploadPath, { recursive: true });
+          cb(null, uploadPath);
+        },
+        filename: (_req, file, cb) => {
+          cb(null, `${Date.now()}-${file.fieldname}${extname(file.originalname)}`);
+        },
+      }),
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+          return cb(new BadRequestException('Only JPEG, PNG, or WebP images are allowed'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  updateItem(
+    @Param('itemId') itemId: string,
+    @Body() payload: UpdateMenuItemDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (file) {
+      return this.menusService.uploadItemImage(itemId, file);
+    }
     return this.menusService.updateItem(itemId, payload);
+  }
+
+  @Patch('menu-items/:itemId/image')
+  @Roles(
+    UserRole.RestaurantAdmin,
+    UserRole.RestaurantOwner,
+    UserRole.RestaurantManager,
+    UserRole.RestaurantStaff,
+    UserRole.SalesOperator,
+    UserRole.SuperAdmin,
+  )
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          const uploadPath = './uploads/menu-items';
+          if (!existsSync(uploadPath)) mkdirSync(uploadPath, { recursive: true });
+          cb(null, uploadPath);
+        },
+        filename: (_req, file, cb) => {
+          cb(null, `${Date.now()}-${file.fieldname}${extname(file.originalname)}`);
+        },
+      }),
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) {
+          return cb(new BadRequestException('Only JPEG, PNG, or WebP images are allowed'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  uploadItemImage(@Param('itemId') itemId: string, @UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('File is required');
+    return this.menusService.uploadItemImage(itemId, file);
   }
 
   @Post('menu-items/:itemId/change-requests')

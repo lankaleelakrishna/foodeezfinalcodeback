@@ -159,6 +159,14 @@ export class RestaurantOrdersController {
     const restaurantId = user?.restaurant?.id;
     return this.service.getRestaurantOrderDetail(orderId, restaurantId);
   }
+
+  @Patch(':orderId/status')
+  updateOrderStatus(
+    @Param('orderId') orderId: string,
+    @Body('status') status: CustomerOrderStatus,
+  ) {
+    return this.service.updateOrderStatus(orderId, status);
+  }
 }
 
 // ─── /admin/tickets ───────────────────────────────────────────────────────────

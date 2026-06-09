@@ -319,7 +319,7 @@ export class AdminCustomersService {
       .where('o.restaurantId = :restaurantId', { restaurantId: opts.restaurantId })
       .orderBy('o.createdAt', 'DESC');
 
-    if (opts.statuses && opts.statuses.length > 0) qb.andWhere('o.status IN (:...statuses)', { statuses: opts.statuses });
+    if (opts.statuses?.length) qb.andWhere('o.status IN (:...statuses)', { statuses: opts.statuses });
     if (opts.branchId) qb.andWhere('o.branchId = :branchId', { branchId: opts.branchId });
     if (opts.search) {
       qb.andWhere('o.orderNumber ILIKE :search', { search: `%${opts.search}%` });

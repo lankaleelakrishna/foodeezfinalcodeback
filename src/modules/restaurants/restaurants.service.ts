@@ -446,10 +446,19 @@ export class RestaurantsService {
       restaurantName: payload.name ?? '',
     });
 
+    // Send registration confirmation email
+    await this.notificationsService.sendRegistrationConfirmation({
+      email: payload.email ?? '',
+      restaurantName: payload.name ?? '',
+      ownerName: payload.ownerName,
+    });
+
+    this.logger.log(`Restaurant ${savedRestaurant.id} registered and confirmation emails sent to ${payload.email}`);
+
     return {
       id: savedRestaurant.id,
       onboardingStep: savedRestaurant.onboardingStep,
-      message: 'Step 1 completed. Please proceed to Step 2.',
+      message: 'Step 1 completed. Confirmation email sent. Please proceed to Step 2.',
     };
   }
 
@@ -924,50 +933,85 @@ export class RestaurantsService {
   async approveRestaurantRegistration(restaurantId: string) {
     const restaurant = await this.findOne(restaurantId);
 
-    if (restaurant.status === 'active') {
-      throw new BadRequestException('Restaurant is already approved and active.');
-    }
-
-    // Update restaurant status to active
+    // Ensure restaurant status is active
+    const wasAlreadyActive = restaurant.status === 'active';
     restaurant.status = 'active';
     restaurant.onboardingStep = 4; // Mark as approved by super-admin
     const updatedRestaurant = await this.restaurantRepository.save(restaurant);
 
     // Find restaurant admin user
-    const restaurantAdmin = await this.userRepository.findOne({
+    let restaurantAdmin = await this.userRepository.findOne({
       where: {
         restaurant: { id: restaurantId },
         role: UserRole.RestaurantAdmin,
       },
     });
 
+    // Generate a new temporary password and its hash (used for existing or new admin)
+    const temporaryPassword = this.generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+
+    let emailRecipient: string | null = null;
     if (restaurantAdmin) {
-      // Generate a new temporary password, persist it, and send credentials now
-      const temporaryPassword = this.generateTemporaryPassword();
-      const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+      // If admin exists but has no email, fallback to restaurant.email (owner)
+      if (!restaurantAdmin.email && restaurant.email) {
+        restaurantAdmin.email = restaurant.email;
+      }
 
-      // update restaurant admin password and require password change on first login
-      restaurantAdmin.passwordHash = passwordHash;
-      restaurantAdmin.mustChangePassword = true;
-      await this.userRepository.save(restaurantAdmin);
+      if (restaurantAdmin.email) {
+        restaurantAdmin.passwordHash = passwordHash;
+        restaurantAdmin.mustChangePassword = true;
+        await this.userRepository.save(restaurantAdmin);
+        emailRecipient = restaurantAdmin.email;
+      } else {
+        this.logger.warn(
+          `Restaurant ${restaurantId} has a restaurant admin record but no email, and restaurant has no email to fallback to.`,
+        );
+      }
+    } else {
+      // No restaurant admin user found — create one if restaurant.email is present
+      if (restaurant.email) {
+        const newAdmin = this.userRepository.create({
+          displayName: restaurant.ownerName ?? `${restaurant.name} Admin`,
+          email: restaurant.email,
+          passwordHash,
+          role: UserRole.RestaurantAdmin,
+          restaurant,
+          mustChangePassword: true,
+        });
+        restaurantAdmin = await this.userRepository.save(newAdmin);
+        emailRecipient = restaurantAdmin.email;
+      } else {
+        this.logger.warn(
+          `Restaurant ${restaurantId} has no restaurant admin user and no restaurant email to create one.`,
+        );
+      }
+    }
 
+    if (emailRecipient) {
       await this.notificationsService.sendRestaurantCredentials({
-        email: restaurantAdmin.email ?? '',
+        email: emailRecipient,
         phone: restaurant.phone ?? '',
         password: temporaryPassword,
         restaurantName: restaurant.name ?? '',
       });
-    }
 
-    this.logger.log(
-      `Restaurant ${restaurantId} (${restaurant.name}) approved by super-admin. Email sent to ${restaurantAdmin?.email}`,
-    );
+      // Also send approval confirmation email
+      await this.notificationsService.sendRestaurantApprovalConfirmation({
+        email: emailRecipient,
+        restaurantName: restaurant.name ?? '',
+      });
+
+      this.logger.log(
+        `Restaurant ${restaurantId} (${restaurant.name}) approved by super-admin.${wasAlreadyActive ? ' (was already active)' : ''} Credentials and approval emails sent to ${emailRecipient}`,
+      );
+    }
 
     return {
       id: updatedRestaurant.id,
       status: updatedRestaurant.status,
       onboardingStep: updatedRestaurant.onboardingStep,
-      message: 'Restaurant approved successfully. Credentials email sent to restaurant admin.',
+      message: `Restaurant approved and set to active.${emailRecipient ? ' Credentials email sent to ' + emailRecipient : ' No admin email available to send credentials.'}`,
       restaurantName: updatedRestaurant.name,
       approvedAt: new Date(),
     };
@@ -995,29 +1039,98 @@ export class RestaurantsService {
 
     const updatedRestaurant = await this.restaurantRepository.save(restaurant);
 
-    // Send menu approval notification to restaurant admin
-    const restaurantAdmin = await this.userRepository.findOne({
+    // Find restaurant admin user to send menu approval notification
+    let restaurantAdmin = await this.userRepository.findOne({
       where: {
         restaurant: { id: restaurantId },
         role: UserRole.RestaurantAdmin,
       },
     });
 
+    let emailRecipient: string | null = null;
+    let temporaryPassword: string | null = null;
+
     if (restaurantAdmin) {
-      this.logger.log(
-        `Menu approved for restaurant ${restaurantId}. Notification available for restaurant admin at dashboard.`,
-      );
+      if (!restaurantAdmin.email && restaurant.email) {
+        restaurantAdmin.email = restaurant.email;
+      }
+
+      if (restaurantAdmin.email) {
+        emailRecipient = restaurantAdmin.email;
+      }
     }
 
-    this.logger.log(
-      `Menu approved and finalized for restaurant ${restaurantId} by super-admin.`,
-    );
+    if (!restaurantAdmin && restaurant.email) {
+      temporaryPassword = this.generateTemporaryPassword();
+      const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+
+      restaurantAdmin = this.userRepository.create({
+        displayName: restaurant.ownerName ?? `${restaurant.name} Admin`,
+        email: restaurant.email,
+        passwordHash,
+        role: UserRole.RestaurantAdmin,
+        restaurant,
+        mustChangePassword: true,
+      });
+
+      restaurantAdmin = await this.userRepository.save(restaurantAdmin);
+      emailRecipient = restaurantAdmin.email;
+    }
+
+    if (restaurantAdmin && !restaurantAdmin.email && restaurant.email) {
+      restaurantAdmin.email = restaurant.email;
+      try {
+        await this.userRepository.save(restaurantAdmin);
+        emailRecipient = restaurantAdmin.email;
+      } catch (e) {
+        this.logger.warn(`Failed to update restaurant admin email for ${restaurantId}`);
+        emailRecipient = restaurant.email;
+      }
+    }
+
+    if (emailRecipient) {
+      if (temporaryPassword) {
+        try {
+          await this.notificationsService.sendRestaurantCredentials({
+            email: emailRecipient,
+            phone: restaurant.phone ?? '',
+            password: temporaryPassword,
+            restaurantName: restaurant.name ?? '',
+          });
+          this.logger.log(
+            `Restaurant credentials email sent to ${emailRecipient} for restaurant ${restaurantId} (${restaurant.name})`,
+          );
+        } catch (err) {
+          this.logger.error(
+            `Failed to send restaurant credentials email to ${emailRecipient} for restaurant ${restaurantId}: ${err}`,
+          );
+        }
+      }
+
+      try {
+        await this.notificationsService.sendMenuApprovalNotification({
+          email: emailRecipient,
+          restaurantName: restaurant.name ?? '',
+        });
+        this.logger.log(
+          `Menu approval notification email sent to ${emailRecipient} for restaurant ${restaurantId} (${restaurant.name})`,
+        );
+      } catch (err) {
+        this.logger.error(
+          `Failed to send menu approval notification to ${emailRecipient} for restaurant ${restaurantId}: ${err}`,
+        );
+      }
+    } else {
+      this.logger.warn(
+        `No email recipient found for restaurant ${restaurantId}. Restaurant admin: ${restaurantAdmin?.email ?? 'N/A'}, Restaurant email: ${restaurant.email ?? 'N/A'}`,
+      );
+    }
 
     return {
       id: updatedRestaurant.id,
       restaurantName: updatedRestaurant.name,
       status: updatedRestaurant.status,
-      message: 'Menu approved and finalized. Restaurant admin has been notified.',
+      message: `Restaurant approved and forwarded to admin.${emailRecipient ? ' Menu approval email sent to ' + emailRecipient : ' No email found to send confirmation.'}${temporaryPassword ? ' Credentials email sent.' : ''}`,
       extractedMenu: {
         categories: updatedRestaurant.extractedMenu.categories,
         approvedAt: updatedRestaurant.extractedMenu.approvalDate,

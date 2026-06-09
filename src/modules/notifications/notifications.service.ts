@@ -297,4 +297,118 @@ Thank you.
       this.logger.error(`Failed sending registration submission email to ${payload.email}: ${err?.message || err}`);
     }
   }
+
+  async sendMenuApprovalNotification(payload: { email: string; restaurantName: string }) {
+    if (!process.env.SMTP_FROM) {
+      this.logger.warn('SMTP_FROM not configured; cannot send menu approval email');
+      return;
+    }
+
+    const subject = `Menu Approved – ${payload.restaurantName}`;
+
+    const body = `
+Hello,
+
+Great news! Your menu for "${payload.restaurantName}" has been reviewed and approved by our team.
+
+Your restaurant is now ready to go live on Foodeez!
+
+If you have any questions or need further assistance, please contact our support team.
+
+Thank you,
+Team Foodeez
+`;
+
+    try {
+      await this.transporter.sendMail({
+        from: process.env.SMTP_FROM,
+        to: payload.email,
+        subject,
+        text: body,
+      });
+      this.logger.log(`Menu approval notification email sent to ${payload.email} for restaurant ${payload.restaurantName}`);
+    } catch (err: any) {
+      this.logger.error(`Failed sending menu approval email to ${payload.email}: ${err?.message || err}`);
+    }
+  }
+
+  async sendRestaurantApprovalConfirmation(payload: { email: string; restaurantName: string }) {
+    if (!process.env.SMTP_FROM) {
+      this.logger.warn('SMTP_FROM not configured; cannot send restaurant approval confirmation email');
+      return;
+    }
+
+    const subject = `Restaurant Approved – ${payload.restaurantName}`;
+
+    const body = `
+Hello,
+
+Congratulations! Your restaurant "${payload.restaurantName}" has been officially approved by our admin team.
+
+Your restaurant is now LIVE on the Foodeez platform and customers can start placing orders!
+
+Next Steps:
+1. Log in to your restaurant dashboard
+2. Monitor incoming orders
+3. Manage your menu and business hours as needed
+
+If you need any support or have questions, please reach out to our team.
+
+Thank you,
+Team Foodeez
+`;
+
+    try {
+      await this.transporter.sendMail({
+        from: process.env.SMTP_FROM,
+        to: payload.email,
+        subject,
+        text: body,
+      });
+      this.logger.log(`Restaurant approval confirmation email sent to ${payload.email} for restaurant ${payload.restaurantName}`);
+    } catch (err: any) {
+      this.logger.error(`Failed sending restaurant approval email to ${payload.email}: ${err?.message || err}`);
+    }
+  }
+
+  async sendRegistrationConfirmation(payload: { email: string; restaurantName: string; ownerName?: string }) {
+    if (!process.env.SMTP_FROM) {
+      this.logger.warn('SMTP_FROM not configured; cannot send registration confirmation email');
+      return;
+    }
+
+    const subject = `Welcome to Foodeez – Registration Confirmation`;
+
+    const body = `
+Hello ${payload.ownerName || 'Restaurant Partner'},
+
+Thank you for registering your restaurant "${payload.restaurantName}" on Foodeez!
+
+Your registration has been received. Our team will review your details and documents over the next 48 hours.
+
+What happens next:
+1. We'll verify your business documents (GST, FSSAI, PAN, Bank details)
+2. Our team will review and approve your menu
+3. Once approved, your restaurant will go LIVE on the Foodeez platform
+
+You can track your onboarding progress in your restaurant dashboard.
+
+If you have any questions or need assistance, please contact our support team.
+
+Thank you,
+Team Foodeez
+`;
+
+    try {
+      await this.transporter.sendMail({
+        from: process.env.SMTP_FROM,
+        to: payload.email,
+        subject,
+        text: body,
+      });
+      this.logger.log(`Registration confirmation email sent to ${payload.email} for restaurant ${payload.restaurantName}`);
+    } catch (err: any) {
+      this.logger.error(`Failed sending registration confirmation email to ${payload.email}: ${err?.message || err}`);
+    }
+  }
 }

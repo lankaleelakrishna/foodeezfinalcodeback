@@ -6,6 +6,7 @@ import { resolve } from 'path';
 import { Repository } from 'typeorm';
 import { DocumentEntity, DocumentType } from '../../entities/document.entity';
 import { RestaurantEntity } from '../../entities/restaurant.entity';
+import { UserEntity, UserRole } from '../../entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -17,6 +18,8 @@ export class DocumentsService {
     private readonly documentRepository: Repository<DocumentEntity>,
     @InjectRepository(RestaurantEntity)
     private readonly restaurantRepository: Repository<RestaurantEntity>,
+    @InjectRepository(UserEntity)
+    private readonly userRepository: Repository<UserEntity>,
     private readonly notificationsService: NotificationsService,
   ) {}
 
@@ -194,7 +197,7 @@ export class DocumentsService {
     return saved;
   }
 
-  /** Mark document as verified (admin) — sends acceptance email to restaurant */
+  /** Mark document as verified (admin) — sends acceptance email to restaurant admin */
   async verifyDocument(restaurantId: string, documentId: string) {
     const document = await this.documentRepository.findOne({
       where: { id: documentId, restaurantId },
@@ -206,16 +209,38 @@ export class DocumentsService {
     document.status = 'verified';
     const saved = await this.documentRepository.save(document);
 
-    await this.notificationsService.sendDocumentVerified({
-      email: document.restaurant.email,
-      restaurantName: document.restaurant.name,
-      documentType: document.type,
+    // Find restaurant admin to send email
+    let restaurantAdmin = await this.userRepository.findOne({
+      where: {
+        restaurant: { id: restaurantId },
+        role: UserRole.RestaurantAdmin,
+      },
     });
+
+    let emailRecipient = restaurantAdmin?.email || document.restaurant.email;
+    if (!emailRecipient) {
+      this.logger.warn(
+        `No email recipient found for document verification. Restaurant: ${restaurantId}, Document: ${documentId}`,
+      );
+      return saved;
+    }
+
+    try {
+      await this.notificationsService.sendDocumentVerified({
+        email: emailRecipient,
+        restaurantName: document.restaurant.name,
+        documentType: document.type,
+      });
+    } catch (err: any) {
+      this.logger.error(
+        `Failed to send document verification email to ${emailRecipient}: ${err?.message || err}`,
+      );
+    }
 
     return saved;
   }
 
-  /** Mark document as rejected (admin) — sends rejection email with reason to restaurant */
+  /** Mark document as rejected (admin) — sends rejection email with reason to restaurant admin */
   async rejectDocument(restaurantId: string, documentId: string, reason: string) {
     const document = await this.documentRepository.findOne({
       where: { id: documentId, restaurantId },
@@ -228,12 +253,34 @@ export class DocumentsService {
     document.metadata = reason;
     const saved = await this.documentRepository.save(document);
 
-    await this.notificationsService.sendDocumentRejected({
-      email: document.restaurant.email,
-      restaurantName: document.restaurant.name,
-      documentType: document.type,
-      reason,
+    // Find restaurant admin to send email
+    let restaurantAdmin = await this.userRepository.findOne({
+      where: {
+        restaurant: { id: restaurantId },
+        role: UserRole.RestaurantAdmin,
+      },
     });
+
+    let emailRecipient = restaurantAdmin?.email || document.restaurant.email;
+    if (!emailRecipient) {
+      this.logger.warn(
+        `No email recipient found for document rejection. Restaurant: ${restaurantId}, Document: ${documentId}`,
+      );
+      return saved;
+    }
+
+    try {
+      await this.notificationsService.sendDocumentRejected({
+        email: emailRecipient,
+        restaurantName: document.restaurant.name,
+        documentType: document.type,
+        reason,
+      });
+    } catch (err: any) {
+      this.logger.error(
+        `Failed to send document rejection email to ${emailRecipient}: ${err?.message || err}`,
+      );
+    }
 
     return saved;
   }

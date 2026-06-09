@@ -5,12 +5,13 @@ import { RegistrationDocumentsController } from './registration-documents.contro
 import { DocumentsService } from './documents.service';
 import { DocumentEntity } from '../../entities/document.entity';
 import { RestaurantEntity } from '../../entities/restaurant.entity';
+import { UserEntity } from '../../entities/user.entity';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { SupabaseStorageModule } from '../supabase-storage/supabase-storage.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([DocumentEntity, RestaurantEntity]), NotificationsModule, SupabaseStorageModule],
+  imports: [TypeOrmModule.forFeature([DocumentEntity, RestaurantEntity, UserEntity]), NotificationsModule, SupabaseStorageModule],
   providers: [DocumentsService, RolesGuard],
   controllers: [DocumentsController, DocumentsPreviewController, DocumentsAdminController, RegistrationDocumentsController],
 })
